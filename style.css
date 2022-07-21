@@ -1,0 +1,208 @@
+/*
+COLORS-------------------------
+#30353B == DARK BACKGROUND
+#4d545b == LIGHT BACKGROUND
+#e7e7dc == LIGHT FONT
+#f5a569 == ORANGE
+#fb5e56 == RED
+#9fdc78 == GREEN
+#4ec2e5 == BLUE
+#e663a1 == PURPLE
+-------------------------------
+*/
+
+*{
+    font-family: "Consolas", monospace;
+    font-size: 12pt;
+    font-weight: bold;
+    color: "#e7e7dc";
+    selection-color: "#30353B";
+    selection-background-color: "#f5a569";
+}
+
+Widget{
+    background-color: "#30353B";
+}
+
+QMenu{
+    color: "#e7e7dc";
+    background-color: "#30353B";
+    font-weight: normal;
+    font-family: "Segoe UI";
+}
+
+QMenu::item:selected{
+    color: "#30353B";
+}
+
+QMenu::separator{
+    height: 2px;
+    background: "#4d545b";
+}
+
+QSplitter{
+
+}
+
+QSplitter::handle{
+    background-color: rgba(120,120,120,1);
+}
+
+QFrame{
+    border: none;
+}
+
+QFrame#header{
+
+}
+
+QProgressBar{
+    border: none;
+    background-color: transparent;
+}
+
+QProgressBar::chunk{
+    background-color: "#f5a569";
+}
+
+#lbl_title{
+    color: "#f5a569";
+    background-color: transparent;
+}
+
+#txt_about{
+    background-color: transparent;
+    padding: 6px;
+}
+
+#frame_search{
+    background-color: "#4d545b";
+}
+
+#txt_searchfield{
+    background-color: "#4d545b";
+    padding: 4px;
+    margin: 4px;
+}
+
+#txt_searchfield:focus{
+    border: 1px solid "#f5a569";
+    border-radius: 2px;
+}
+
+#txt_output{
+    background-color: transparent;
+    padding: 4px;
+    margin: 4px;
+}
+
+#txt_output:focus{
+    border: 1px solid "#f5a569";
+    border-radius: 2px;
+}
+
+#txt_output_neg{
+    color: grey;
+    background-color: transparent;
+    padding: 4px;
+    margin: 4px;
+}
+
+#txt_output_neg:focus{
+    border: 1px solid "#f5a569";
+    border-radius: 2px;
+}
+
+#frame_status{
+    background-color: transparent;
+}
+
+#lbl_status{
+    font-size: 10pt;
+    color: grey;
+}
+
+#lbl_error{
+    color: "#fb5e56";
+    font-size: 10pt;
+}
+
+#btn_refreshTOR{
+    font-size: 10pt;
+    color: grey;
+    border: 1px solid grey;
+    padding-right: 4px;
+    padding-left: 4px;
+}
+
+#btn_refreshTOR:hover{
+    color: "#30353B";
+    border: none;
+}
+
+QPushButton{
+    border: none;
+    border-radius: 2px;
+    color: "#f5a569";
+}
+
+QPushButton:hover{
+    background-color: "#f5a569";
+    color: "#30353B";
+}
+
+QPushButton#btn_search{
+    background-color: "#4d545b";
+}
+
+QPushButton#btn_search:hover{
+    background-color: "#f5a569";
+}
+
+QAbstractScrollArea::corner {
+    background: transparent;
+}
+
+QScrollBar{
+    background: transparent;
+    width: 8px;
+}
+
+QScrollBar::handle{
+    background: "#f5a569";
+    min-height: 20px;
+}
+
+QScrollBar::add-line{
+    height: 0px;
+}
+
+QScrollBar::sub-line{
+    height: 0px;
+}
+
+QScrollBar::add-page{
+    background: none;
+}
+
+QScrollBar::sub-page{
+    background: none;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
