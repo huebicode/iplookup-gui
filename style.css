@@ -65,6 +65,55 @@ QProgressBar::chunk{
     background-color: "#f5a569";
 }
 
+QPushButton{
+    border: none;
+    border-radius: 2px;
+    color: "#f5a569";
+}
+
+QPushButton:hover{
+    background-color: "#f5a569";
+    color: "#30353B";
+}
+
+QPushButton#btn_search{
+    background-color: "#4d545b";
+}
+
+QPushButton#btn_search:hover{
+    background-color: "#f5a569";
+}
+
+QAbstractScrollArea::corner {
+    background: transparent;
+}
+
+QScrollBar{
+    background: transparent;
+    width: 8px;
+}
+
+QScrollBar::handle{
+    background: "#f5a569";
+    min-height: 20px;
+}
+
+QScrollBar::add-line{
+    height: 0px;
+}
+
+QScrollBar::sub-line{
+    height: 0px;
+}
+
+QScrollBar::add-page{
+    background: none;
+}
+
+QScrollBar::sub-page{
+    background: none;
+}
+
 #lbl_title{
     color: "#f5a569";
     background-color: transparent;
@@ -117,7 +166,7 @@ QProgressBar::chunk{
     background-color: transparent;
 }
 
-#lbl_status{
+#lbl_status, #lbl_status_dbs{
     font-size: 10pt;
     color: grey;
 }
@@ -127,67 +176,22 @@ QProgressBar::chunk{
     font-size: 10pt;
 }
 
-#btn_refreshTOR{
+#btn_refreshTOR, #btn_refreshDBs{
     font-size: 10pt;
     color: grey;
     border: 1px solid grey;
     padding-right: 4px;
     padding-left: 4px;
+    margin-left: 4px;
+    margin-right: 12px;
 }
 
-#btn_refreshTOR:hover{
+#btn_refreshTOR:hover, #btn_refreshDBs:hover{
     color: "#30353B";
     border: none;
 }
 
-QPushButton{
-    border: none;
-    border-radius: 2px;
-    color: "#f5a569";
-}
 
-QPushButton:hover{
-    background-color: "#f5a569";
-    color: "#30353B";
-}
-
-QPushButton#btn_search{
-    background-color: "#4d545b";
-}
-
-QPushButton#btn_search:hover{
-    background-color: "#f5a569";
-}
-
-QAbstractScrollArea::corner {
-    background: transparent;
-}
-
-QScrollBar{
-    background: transparent;
-    width: 8px;
-}
-
-QScrollBar::handle{
-    background: "#f5a569";
-    min-height: 20px;
-}
-
-QScrollBar::add-line{
-    height: 0px;
-}
-
-QScrollBar::sub-line{
-    height: 0px;
-}
-
-QScrollBar::add-page{
-    background: none;
-}
-
-QScrollBar::sub-page{
-    background: none;
-}
 
 
 

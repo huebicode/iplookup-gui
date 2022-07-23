@@ -13,10 +13,14 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 
+#include <QtZlib/zlib.h>
+#include <QStandardPaths>
+#include <QRegularExpression>
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
-{
+{   
     ui->setupUi(this);
 
     divider = "<font color='grey'>|</font>";
@@ -37,13 +41,13 @@ Widget::Widget(QWidget *parent)
     ui->txt_about->setCursorWidth(0);
     ui->txt_about->setText(
                 "<body style='white-space: pre-wrap; font-weight: normal;'><img src=':logo.svg' style='float:left;' >"
-                "<b style=color:"+ colorOrange +";>IP Lookup v1.0</b><br>"
+                "<b style=color:"+ colorOrange +";>IP Lookup v1.1</b><br>"
                 "Copyright (C) 2022 Alexander Hübert<br>"
                 "Licence: LGPL<br>"
                 "contact@huebicode.com<br><br><br>"
                 "This is free software. It is provided “as-is” without warranty of any kind.<br><br>"
                 "It is using the lite databases of DB-IP <span style=color:"+ colorOrange +";>https://db-ip.com</span> and the free APIs of abuse.ch <span style=color:"+ colorOrange +";>https://abuse.ch</span> (CC0) and the Tor Project, Inc. <span style=color:"+ colorOrange +";>https://torproject.org</span> (CC0).<br><br>"
-                "For current results the TOR-Data should be refreshed and the IP databases updated. The databases (ASN lite and Country lite) can be downloaded for free from DB-IP and replaced in the application folder in the \"mmdb\" directory.<br><br>"
+                "For current results the TOR-Data and the IP databases should be refreshed. New databases from DB-IP (ASN lite and Country lite) are published every month. You can also use your own mmdb-databases (ASN and Country). Just replace them in the 'ProgramData' directory in the folder of this application.<br><br>"
                 "Shortcuts:<br><br>"
                 "     Ctrl + Return: start search<br><br><br>"
                 "- made with <span style=color:"+ colorOrange +";>❤️</span> and Qt -<br><br><br><br>"
@@ -194,11 +198,19 @@ Widget::Widget(QWidget *parent)
     keyCtrlReturn->setKey(Qt::CTRL | Qt::Key_Return);
     connect(keyCtrlReturn, SIGNAL(activated()), this, SLOT(slot_shortcutCtrlReturn()));
 
+    currentDate = QDate::currentDate();
+    currentMonth = currentDate.toString("yyyy-MM");
+    lastMonthDate = currentDate.addMonths(-1);
+    lastMonth = lastMonthDate.toString("yyyy-MM");
+
+    programDataPath = QStandardPaths::standardLocations(QStandardPaths::AppConfigLocation).at(1);
+    createProgramDataDir();
+
     torPublished = "";
     torDataVec = fetch_tor_data();
     torPublished.chop(3);
     if(torPublished.length() > 0){
-        ui->lbl_status->setText("TOR-Data from: " + torPublished + " UTC ");
+        ui->lbl_status->setText("TOR-Data from: " + torPublished + " UTC");
     }
 }
 
@@ -218,20 +230,6 @@ void Widget::on_btn_about_clicked()
         ui->stackedWidget->setCurrentIndex(0);
         ui->btn_search->setVisible(true);
         ui->btn_about->setText("?");
-    }
-}
-
-
-void Widget::on_btn_refreshTOR_clicked()
-{
-    download_tor_json();
-    fetch_tor_data();
-    torPublished.chop(3);
-    if(torPublished.length() > 0){
-        ui->lbl_status->setText("TOR-Data from: " + torPublished + " UTC ");
-    }
-    else {
-        ui->lbl_error->setText("| No TOR-Data!");
     }
 }
 
@@ -396,9 +394,11 @@ QString Widget::truncate(QString input, int width, QChar fillchar, bool trunc)
 bool Widget::mmdb_check()
 {
     ui->lbl_error->clear();
-    QDir mmdbDir(QDir::currentPath() + "/mmdb");
+    ui->lbl_status_dbs->clear();
+
+    QDir mmdbDir(programDataPath);
     if(!mmdbDir.exists()){
-        ui->lbl_error->setText(" | directory 'mmdb' does not exist!");
+        ui->lbl_error->setText(" | 'IPLookup' dir in 'ProgramData' does not exist!");
         return false;
     }
 
@@ -421,6 +421,12 @@ bool Widget::mmdb_check()
     }
     if(asnList.length() > 0){
         asndb_path = mmdbDir.absoluteFilePath(asnList.at(asnList.length()-1));
+        QRegularExpression re("\\d\\d\\d\\d-\\d\\d");
+        QRegularExpressionMatch match = re.match(asndb_path);
+        if(match.hasMatch()){
+            QString matched = match.captured(0);
+            ui->lbl_status_dbs->setText("DB-IP-Data from: " + matched);
+        }
     } else {
         missing += " | 'asn.mmdb' file missing!";
     }
@@ -547,11 +553,94 @@ QString Widget::fetch_threatfox(QByteArray search)
     return output.trimmed();
 }
 
+QByteArray Widget::gUncompress(const QByteArray &data)
+{
+    if (data.size() <= 4) {
+            qWarning("gUncompress: Input data is truncated");
+            return QByteArray();
+        }
+
+        QByteArray result;
+
+        int ret;
+        z_stream strm;
+        static const int CHUNK_SIZE = 1024;
+        char out[CHUNK_SIZE];
+
+        strm.zalloc = Z_NULL;
+        strm.zfree = Z_NULL;
+        strm.opaque = Z_NULL;
+        strm.avail_in = data.size();
+        strm.next_in = (Bytef*)(data.data());
+
+        ret = inflateInit2(&strm, 15 +  32);
+        if (ret != Z_OK)
+            return QByteArray();
+
+        // run inflate()
+        do {
+            strm.avail_out = CHUNK_SIZE;
+            strm.next_out = (Bytef*)(out);
+
+            ret = inflate(&strm, Z_NO_FLUSH);
+            Q_ASSERT(ret != Z_STREAM_ERROR);
+
+            switch (ret) {
+            case Z_NEED_DICT:
+                ret = Z_DATA_ERROR;
+            case Z_DATA_ERROR:
+            case Z_MEM_ERROR:
+                (void)inflateEnd(&strm);
+                return QByteArray();
+            }
+
+            result.append(out, CHUNK_SIZE - strm.avail_out);
+        } while (strm.avail_out == 0);
+
+        inflateEnd(&strm);
+        return result;
+}
+
+
+void Widget::createProgramDataDir()
+{
+    QDir programDataDir(programDataPath);
+
+    if(!programDataDir.exists()){
+        if(programDataDir.mkpath(".")){
+
+            QDir mmdbDirApp(QDir::currentPath() + "/mmdb");
+
+            if(!mmdbDirApp.exists()){
+                return;
+            }
+
+            copyFiles(mmdbDirApp.absolutePath(), programDataPath);
+        }
+        else {
+            return;
+        }
+    }
+    else return;
+}
+
+
+void Widget::copyFiles(QString srcDir, QString dstDir)
+{
+    QDir dir(srcDir);
+    if(!dir.exists())
+        return;
+
+    foreach(QString f, dir.entryList(QDir::Files)){
+        QFile::copy(srcDir + QDir::separator() + f, dstDir + QDir::separator() +f);
+    }
+}
+
 
 QByteArray Widget::download_tor_json()
 {
     ui->lbl_error->clear();
-    ui->lbl_status->setText("trying to download TOR-Data... ");
+    ui->lbl_status->setText("trying to download TOR-Data...");
 
     const QString url = "https://onionoo.torproject.org/details";
 
@@ -569,9 +658,9 @@ QByteArray Widget::download_tor_json()
         ui->lbl_error->setText(" | Couldn’t download TOR-Data!");
         return torData;
     } else {
-        QDir mmdbDir(QDir::currentPath() + "/mmdb");
+        QDir mmdbDir(programDataPath);
         if(!mmdbDir.exists()){
-            ui->lbl_error->setText(" | directory 'mmdb' does not exist!");
+            ui->lbl_error->setText(" | 'IPLookup' dir in 'ProgramData' does not exist!");
             return torData;
         }
         QFile file(mmdbDir.absoluteFilePath("TOR.json"));
@@ -586,15 +675,126 @@ QByteArray Widget::download_tor_json()
     }
 }
 
+void Widget::download_mmdbs()
+{
+    QDir mmdbDir(programDataPath);
+    if(!mmdbDir.exists()){
+        ui->lbl_error->setText(" | 'IPLookup' dir in 'ProgramData' does not exist!");
+        return;
+    }
+
+    QStringList asnFilter;
+    asnFilter << "*asn*.mmdb";
+
+    QStringList countryFilter;
+    countryFilter << "*country*.mmdb";
+
+    QStringList asnList = mmdbDir.entryList(asnFilter);
+    QStringList countryList = mmdbDir.entryList(countryFilter);
+
+    if(asnList.empty()){
+        download_asn();
+    }
+    else {
+        foreach(auto const &item, asnList){
+            if(item.contains(currentMonth)){
+                break;
+            } else {
+                download_asn();
+            }
+        }
+    }
+
+
+    if(countryList.empty()){
+        download_country();
+    }
+    else {
+        foreach(auto const &item, countryList){
+            if(item.contains(currentMonth)){
+                break;
+            } else {
+                download_country();
+            }
+        }
+    }
+}
+
+
+void Widget::download_asn()
+{
+    QDir mmdbDir(programDataPath);
+    if(!mmdbDir.exists()){
+        ui->lbl_error->setText(" | 'IPLookup' dir in 'ProgramData' does not exist!");
+        return;
+    }
+
+    QString url_asndb = QString("https://download.db-ip.com/free/dbip-asn-lite-%1.mmdb.gz").arg(currentMonth);
+
+    QNetworkAccessManager netmanager;
+    QNetworkReply *responseASN = netmanager.get(QNetworkRequest(url_asndb));
+    QEventLoop loop;
+    connect(responseASN, SIGNAL(finished()), &loop, SLOT(quit()));
+    loop.exec();
+    QByteArray asndb = responseASN->readAll();
+
+    if(responseASN->error()){
+        ui->lbl_error->setText(" | Couldn’t download ASN-DB!");
+        return;
+    } else {
+        QFile file(mmdbDir.absoluteFilePath(QString("dbip-asn-lite-%1.mmdb").arg(currentMonth)));
+        file.remove();
+        QFile oldFile(mmdbDir.absoluteFilePath(QString("dbip-asn-lite-%1.mmdb").arg(lastMonth)));
+        oldFile.remove();
+        if(file.open(QIODevice::ReadWrite)){
+            file.write(gUncompress(asndb));
+        }
+        file.close();
+    }
+}
+
+
+void Widget::download_country()
+{
+    QDir mmdbDir(programDataPath);
+    if(!mmdbDir.exists()){
+        ui->lbl_error->setText(" | 'IPLookup' dir in 'ProgramData' does not exist!");
+        return;
+    }
+
+    QString url_countrydb = QString("https://download.db-ip.com/free/dbip-country-lite-%1.mmdb.gz").arg(currentMonth);
+
+    QNetworkAccessManager netmanager;
+    QNetworkReply *responseCountry = netmanager.get(QNetworkRequest(url_countrydb));
+    QEventLoop loop;
+    connect(responseCountry, SIGNAL(finished()), &loop, SLOT(quit()));
+    loop.exec();
+    QByteArray countrydb = responseCountry->readAll();
+
+    if(responseCountry->error()){
+        ui->lbl_error->setText(" | Couldn’t download COUNTRY-DB!");
+        return;
+    } else {
+        QFile file(mmdbDir.absoluteFilePath(QString("dbip-country-lite-%1.mmdb").arg(currentMonth)));
+        file.remove();
+        QFile oldFile(mmdbDir.absoluteFilePath(QString("dbip-country-lite-%1.mmdb").arg(lastMonth)));
+        oldFile.remove();
+        if(file.open(QIODevice::ReadWrite)){
+            file.write(gUncompress(countrydb));
+        }
+        file.close();
+    }
+}
+
 
 QVector<QString> Widget::fetch_tor_data()
 {
     QVector<QString> torEntries;
     QByteArray torData;
 
-    QDir mmdbDir(QDir::currentPath() + "/mmdb");
+    QDir mmdbDir(programDataPath);
     if(!mmdbDir.exists()){
-        ui->lbl_error->setText(" | directory 'mmdb' does not exist!");
+        ui->lbl_error->setText(" | 'IPLookup' dir in 'ProgramData' does not exist!");
         return torEntries;
     }
 
@@ -662,4 +862,24 @@ QVector<QString> Widget::fetch_tor_data()
     return torEntries;
 }
 
+
+void Widget::on_btn_refreshTOR_clicked()
+{
+    download_tor_json();
+    fetch_tor_data();
+    torPublished.chop(3);
+    if(torPublished.length() > 0){
+        ui->lbl_status->setText("TOR-Data from: " + torPublished + " UTC");
+    }
+    else {
+        ui->lbl_error->setText("| No TOR-Data!");
+    }
+}
+
+void Widget::on_btn_refreshDBs_clicked()
+{
+    ui->lbl_status_dbs->setText("trying to download databases...");
+    download_mmdbs();
+    mmdb_check();
+}
 

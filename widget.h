@@ -3,6 +3,8 @@
 
 #include <QShortcut>
 #include <QWidget>
+#include <QDate>
+#include <QDir>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Widget; }
@@ -25,6 +27,8 @@ private slots:
 
     void on_btn_refreshTOR_clicked();
 
+    void on_btn_refreshDBs_clicked();
+
 private:
     Ui::Widget *ui;
     QSet<QString> inputSet;
@@ -43,16 +47,26 @@ private:
     QString colorBlue;
     QString colorPurple;
 
+    QDate currentDate;
+    QString currentMonth;
+    QDate lastMonthDate;
+    QString lastMonth;
+
     QString torPublished;
     QVector<QString> torDataVec;
 
     QVector<QString> fetch_tor_data();
     QByteArray download_tor_json();
+    void download_mmdbs();
+    void download_asn();
+    void download_country();
     QString truncate(QString input, int width, QChar fillchar, bool trunc);
     bool mmdb_check();
 
     QString fetch_urlhaus(QByteArray host);
     QString fetch_threatfox(QByteArray search);
+
+    QByteArray gUncompress(const QByteArray &data);
 
     int padASN;
     int padISO;
@@ -60,5 +74,10 @@ private:
     int padURLHAUS;
     int padTHREATFOX;
     int padTOR;
+
+    QString programDataPath;
+    void createProgramDataDir();
+    void copyFiles(QString srcDir, QString dstDir);
+
 };
 #endif // WIDGET_H
