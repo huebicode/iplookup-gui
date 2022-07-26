@@ -208,17 +208,9 @@ Widget::Widget(QWidget *parent)
     connect(keyCtrlShiftV, SIGNAL(activated()), this, SLOT(slot_shortcutCtrlShiftV()));
 
     ui->txt_searchfield->setContextMenuPolicy(Qt::CustomContextMenu);
-    menuSearchfield = ui->txt_searchfield->createStandardContextMenu();
-
     pasteFiltered = new QAction("Paste Filtered\tCtrl+Shift+V", this);
+    menuSearchfield = new QMenu(this);
     connect(pasteFiltered, SIGNAL(triggered()), this, SLOT(slot_shortcutCtrlShiftV()));
-
-    actionList = menuSearchfield->actions();
-    foreach(auto const &item, actionList){
-        if(item->text().contains("Undo")) item->setVisible(false);
-        if(item->text().contains("Redo")) item->setVisible(false);
-        if(item->text().contains("Delete")) menuSearchfield->insertAction(item, pasteFiltered);
-    }
 
     currentDate = QDate::currentDate();
     currentMonth = currentDate.toString("yyyy-MM");
@@ -976,6 +968,16 @@ void Widget::on_btn_refreshDBs_clicked()
 
 void Widget::on_txt_searchfield_customContextMenuRequested(const QPoint &pos)
 {
+    menuSearchfield->deleteLater();
+    menuSearchfield = ui->txt_searchfield->createStandardContextMenu();
+    actionList = menuSearchfield->actions();
+
+    foreach(auto const &item, actionList){
+        if(item->text().contains("Undo")) item->setVisible(false);
+        if(item->text().contains("Redo")) item->setVisible(false);
+        if(item->text().contains("Delete")) menuSearchfield->insertAction(item, pasteFiltered);
+    }
+
     menuSearchfield->popup(ui->txt_searchfield->viewport()->mapToGlobal(pos));
 }
 
