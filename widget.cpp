@@ -17,6 +17,9 @@
 #include <QStandardPaths>
 #include <QRegularExpression>
 
+#include <QClipboard>
+#include <QMenu>
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
@@ -41,7 +44,7 @@ Widget::Widget(QWidget *parent)
     ui->txt_about->setCursorWidth(0);
     ui->txt_about->setText(
                 "<body style='white-space: pre-wrap; font-weight: normal;'><img src=':logo.svg' style='float:left;' >"
-                "<b style=color:"+ colorOrange +";>IP Lookup v1.1</b><br>"
+                "<b style=color:"+ colorOrange +";>IP Lookup v1.2</b><br>"
                 "Copyright (C) 2022 Alexander Hübert<br>"
                 "Licence: LGPL<br>"
                 "contact@huebicode.com<br><br><br>"
@@ -49,7 +52,8 @@ Widget::Widget(QWidget *parent)
                 "It is using the lite databases of DB-IP <span style=color:"+ colorOrange +";>https://db-ip.com</span> and the free APIs of abuse.ch <span style=color:"+ colorOrange +";>https://abuse.ch</span> (CC0) and the Tor Project, Inc. <span style=color:"+ colorOrange +";>https://torproject.org</span> (CC0).<br><br>"
                 "For current results the TOR-Data and the IP databases should be refreshed. New databases from DB-IP (ASN lite and Country lite) are published every month. You can also use your own mmdb-databases (ASN and Country). Just replace them in the 'ProgramData' directory in the folder of this application.<br><br>"
                 "Shortcuts:<br><br>"
-                "     Ctrl + Return: start search<br><br><br>"
+                "     Ctrl+Return:  start search<br>"
+                "     Ctrl+Shift+V: extract and paste IPs from clipboard<br><br><br>"
                 "- made with <span style=color:"+ colorOrange +";>❤️</span> and Qt -<br><br><br><br>"
                 "--- USED SOFTWARE, LIBRARIES, DATABASES ---<br><br>"
                 "<b style=color:"+ colorOrange +";>Qt Framework v6.3</b><br>"
@@ -177,6 +181,7 @@ Widget::Widget(QWidget *parent)
                 "c. No term or condition of this Public License will be waived and no failure to comply consented to unless expressly agreed to by the Licensor.<br>"
                 "d. Nothing in this Public License constitutes or may be interpreted as a limitation upon, or waiver of, any privileges and immunities that apply to the Licensor or You, including from the legal processes of any jurisdiction or authority.<br>"
                 );
+
     ui->txt_output->setCursorWidth(0);
     ui->txt_output_neg->setCursorWidth(0);
     ui->txt_output_neg->hide();
@@ -197,6 +202,23 @@ Widget::Widget(QWidget *parent)
     keyCtrlReturn = new QShortcut(this);
     keyCtrlReturn->setKey(Qt::CTRL | Qt::Key_Return);
     connect(keyCtrlReturn, SIGNAL(activated()), this, SLOT(slot_shortcutCtrlReturn()));
+
+    keyCtrlShiftV = new QShortcut(this);
+    keyCtrlShiftV->setKey(Qt::CTRL | Qt::SHIFT | Qt::Key_V);
+    connect(keyCtrlShiftV, SIGNAL(activated()), this, SLOT(slot_shortcutCtrlShiftV()));
+
+    ui->txt_searchfield->setContextMenuPolicy(Qt::CustomContextMenu);
+    menuSearchfield = ui->txt_searchfield->createStandardContextMenu();
+
+    pasteFiltered = new QAction("Paste Filtered\tCtrl+Shift+V", this);
+    connect(pasteFiltered, SIGNAL(triggered()), this, SLOT(slot_shortcutCtrlShiftV()));
+
+    actionList = menuSearchfield->actions();
+    foreach(auto const &item, actionList){
+        if(item->text().contains("Undo")) item->setVisible(false);
+        if(item->text().contains("Redo")) item->setVisible(false);
+        if(item->text().contains("Delete")) menuSearchfield->insertAction(item, pasteFiltered);
+    }
 
     currentDate = QDate::currentDate();
     currentMonth = currentDate.toString("yyyy-MM");
@@ -243,7 +265,7 @@ void Widget::on_btn_search_clicked()
     QStringList inputStrList = ui->txt_searchfield->toPlainText().split("\n");
 
     foreach(const auto &item, inputStrList){
-        inputSet.insert(item.trimmed());
+        inputSet.insert(item.trimmed().toLower());
     }
 
     int inputSize = inputSet.size();
@@ -263,7 +285,7 @@ void Widget::on_btn_search_clicked()
         QByteArray outputError(mmdbinspect.readAllStandardError());
 
         counter++;
-        //qDebug() << float(counter) / float(inputSize) * 100;
+
         ui->progressBar->setValue(float(counter) / float(inputSize) * 100);
         if(counter == inputSize){
             ui->progressBar->hide();
@@ -325,38 +347,53 @@ void Widget::on_btn_search_clicked()
                 .toObject().value("en").toString();
 
 
-        //CHECK URLHAUS
-        QString urlhaus = fetch_urlhaus(item.toUtf8());
-
-        //CHECK THREATFOX
-        QString threatfox = fetch_threatfox(item.toUtf8());
-
-        //CHECK TOR-DATA
+        QString urlhaus;
+        QString threatfox;
         QString tor;
-        if(torDataVec.size() == 0){
-            tor = "<font color=grey>"+ truncate("no data", padTOR, ' ', true) +"</font>";
+
+        QRegularExpression re_priv_ip_range(R"((^0\.)|(^127\.)|(^10\.)|(^169\.254\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.168\.))");
+
+        if(re_priv_ip_range.match(item).hasMatch()||
+                item == "255.255.255.255" ||
+                item == "::1" ||
+                item.startsWith("fe80::")
+                ){
+            asn = "<font color=grey>" + truncate("local IP", padASN, ' ', true) + "</font>";
+            iso = "<font color=grey>" + truncate("-", padISO, ' ', true) + "</font>";
+            country = "<font color=grey>" + truncate("-", padCOUNTRY, ' ', true) + "</font>";
+            urlhaus = "<font color=grey>" + truncate("-", padURLHAUS, ' ', true) + "</font>";
+            threatfox = "<font color=grey>" + truncate("-", padTHREATFOX, ' ', true) + "</font>";
+            tor = "<font color=grey>" + truncate("-", padTOR, ' ', true) + "</font>";
         }
         else {
-            foreach(const auto &element, torDataVec){
-                if(element.contains(item)){
-                    QStringList firstElem = element.split('|');
-                    tor = "<font color="+ colorPurple +">" + truncate(firstElem.first(), padTOR, ' ', true) + "</font>";
-                    break;
-                } else {
-                    tor = "<font color=grey>"+ truncate("-", padTOR, ' ', true) +"</font>";
+
+            urlhaus = fetch_urlhaus(item.toUtf8());
+            threatfox = fetch_threatfox(item.toUtf8());
+
+            if(torDataVec.size() == 0){
+                tor = "<font color=grey>"+ truncate("no data", padTOR, ' ', true) +"</font>";
+            }
+            else {
+                foreach(const auto &element, torDataVec){
+                    if(element.contains(item)){
+                        QStringList firstElem = element.split('|');
+                        tor = "<font color="+ colorPurple +">" + truncate(firstElem.first(), padTOR, ' ', true) + "</font>";
+                        break;
+                    } else {
+                        tor = "<font color=grey>"+ truncate("-", padTOR, ' ', true) +"</font>";
+                    }
                 }
             }
+
+            if(asn.isEmpty()) { asn = "<font color=grey>" + truncate("-", padASN, ' ', true) + "</font>"; }
+            else { asn = "<font color="+ colorGreen +">" + truncate(asn, padASN, ' ', true) + "</font>"; }
+
+            if(iso.isEmpty()) { iso = "<font color=grey>" + truncate("-", padISO, ' ', true) + "</font>"; }
+            else { iso = truncate(iso, padISO, ' ', true); }
+
+            if(country.isEmpty()) { country = "<font color=grey>" + truncate("-", padCOUNTRY, ' ', true) + "</font>"; }
+            else { country = truncate(country, padCOUNTRY, ' ', true); }
         }
-
-
-        if(asn.isEmpty()) { asn = "<font color=grey>" + truncate("-", padASN, ' ', true) + "</font>"; }
-        else { asn = "<font color="+ colorGreen +">" + truncate(asn, padASN, ' ', true) + "</font>"; }
-
-        if(iso.isEmpty()) { iso = "<font color=grey>" + truncate("-", padISO, ' ', true) + "</font>"; }
-        else { iso = truncate(iso, padISO, ' ', true); }
-
-        if(country.isEmpty()) { country = "<font color=grey>" + truncate("-", padCOUNTRY, ' ', true) + "</font>"; }
-        else { country = truncate(country, padCOUNTRY, ' ', true); }
 
         ui->txt_output->append("<span style='white-space: pre-wrap;'>" + asn
                                + divider + iso
@@ -373,6 +410,12 @@ void Widget::on_btn_search_clicked()
 void Widget::slot_shortcutCtrlReturn()
 {
     on_btn_search_clicked();
+}
+
+void Widget::slot_shortcutCtrlShiftV()
+{
+    QString input = filteredClipboard();
+    ui->txt_searchfield->insertPlainText(input);
 }
 
 
@@ -577,7 +620,6 @@ QByteArray Widget::gUncompress(const QByteArray &data)
         if (ret != Z_OK)
             return QByteArray();
 
-        // run inflate()
         do {
             strm.avail_out = CHUNK_SIZE;
             strm.next_out = (Bytef*)(out);
@@ -634,6 +676,53 @@ void Widget::copyFiles(QString srcDir, QString dstDir)
     foreach(QString f, dir.entryList(QDir::Files)){
         QFile::copy(srcDir + QDir::separator() + f, dstDir + QDir::separator() +f);
     }
+}
+
+QString Widget::filteredClipboard()
+{
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    QString input = clipboard->text();
+    input.replace("[.]",".");
+    input.replace("[.", ".");
+    input.replace(".]", ".");
+    input.replace("(.)",".");
+    input.replace("(.",".");
+    input.replace(".)",".");
+    input.replace("[:]",":");
+
+    QString matchStr;
+    QSet<QString> matchSet;
+
+    QRegularExpression re_find_ipv4(R"(\b(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\b)");
+    QRegularExpression re_find_ipv6(R"((?i)(?:[\da-f]{0,4}:){1,7}(?:(?<ipv4>(?:(?:25[0-5]|2[0-4]\d|1?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|1?\d\d?))|[\da-f]{0,4}))", QRegularExpression::CaseInsensitiveOption);
+
+    QRegularExpressionMatchIterator i_ipv4;
+    QRegularExpressionMatchIterator i_ipv6;
+
+    i_ipv4 = re_find_ipv4.globalMatch(input);
+    while(i_ipv4.hasNext()){
+        matchSet.insert(i_ipv4.next().captured(0));
+    }
+
+    i_ipv6 = re_find_ipv6.globalMatch(input);
+    while(i_ipv6.hasNext()){
+        QString ipv6address = i_ipv6.next().captured(0);
+        if(ipv6address.length() > 2 && !(ipv6address.contains(".")) && (ipv6address.count(':') == 7 || ipv6address.contains("::"))){
+            matchSet.insert(ipv6address);
+        }
+    }
+
+    foreach(const auto &item, matchSet){
+            matchStr += item + "\n";
+    }
+
+    return matchStr;
+}
+
+void Widget::customMenu(QPoint pos)
+{
+    QMenu *stdMenu = ui->txt_searchfield->createStandardContextMenu();
+    stdMenu->popup(ui->txt_searchfield->viewport()->mapToGlobal(pos));
 }
 
 
@@ -876,10 +965,17 @@ void Widget::on_btn_refreshTOR_clicked()
     }
 }
 
+
 void Widget::on_btn_refreshDBs_clicked()
 {
     ui->lbl_status_dbs->setText("trying to download databases...");
     download_mmdbs();
     mmdb_check();
+}
+
+
+void Widget::on_txt_searchfield_customContextMenuRequested(const QPoint &pos)
+{
+    menuSearchfield->popup(ui->txt_searchfield->viewport()->mapToGlobal(pos));
 }
 
